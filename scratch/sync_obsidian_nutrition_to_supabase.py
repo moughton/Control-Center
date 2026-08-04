@@ -4,27 +4,79 @@ import json
 import hashlib
 
 foods_dir = r"C:\_git\robo-documents\🎛️ Control Center\Supabase Data\Foods"
+recipes_dir = r"C:\_git\robo-documents\🎛️ Control Center\Supabase Data\Recipes"
 
 def calculate_md5(content):
   return hashlib.md5(content.encode("utf-8")).hexdigest()
 
-def parse_food_file(content, filename):
-  """
-  Parses a Food markdown file comprehensively, extracting:
-  - 2-Column Vertical Table OR YAML Frontmatter
-  - Portion State (Cooked vs Raw vs Dry)
-  - Quotes ([!quote])
-  - Overview / Sports Nutrition Snapshot ([!success])
-  - Quick Reference Portion Conversions
-  - Food Synergies Table
-  - Dosage & Timing Guidance (with timing notes)
-  - Meal Ideas & Pairings
-  - Full Micronutrient Details (Vitamins, Minerals, Amino Acids, Polyphenols)
-  """
+def clean_number(val):
+  if val is None: return 0
+  if isinstance(val, (int, float)): return val
+  val_str = str(val).strip()
+  num_match = re.search(r"^([\d\.,]+)", val_str)
+  if num_match:
+    raw_num = num_match.group(1).replace(",", "")
+    try:
+      if "." in raw_num: return float(raw_num)
+      else: return int(raw_num)
+    except ValueError:
+      pass
+  return 0
+
+def parse_all_markdown_tables(content):
+  """Extracts ALL markdown tables from content into structured JSON lists of rows."""
+  tables = []
+  raw_tables = re.findall(r"((?:\|[^\n]+\|\n)+)", content)
+  for t in raw_tables:
+    lines = [line.strip() for line in t.strip().split("\n") if line.strip()]
+    if len(lines) < 2:
+      continue
+    
+    headers = [h.strip() for h in lines[0].split("|")[1:-1]]
+    if not headers or all(h == "" or "---" in h for h in headers):
+      continue
+    
+    rows = []
+    for line in lines[1:]:
+      if "---" in line:
+        continue
+      cells = [c.strip() for c in line.split("|")[1:-1]]
+      if len(cells) == len(headers):
+        row_obj = {}
+        for h, c in zip(headers, cells):
+          row_obj[h] = c
+        rows.append(row_obj)
+    
+    if rows:
+      tables.append({"headers": headers, "rows": rows})
+  return tables
+
+def parse_callouts_and_quotes(content):
+  """Extracts all Obsidian blockquote callouts ([!quote], [!success], [!info], [!tip], [!warning])."""
+  callouts = []
+  quotes = []
+  
+  blocks = re.findall(r"(?:^>[^\n]*\n?)+", content, re.MULTILINE)
+  for b in blocks:
+    clean_text = "\n".join([line.lstrip("> ").strip() for line in b.split("\n") if line.strip()])
+    c_match = re.search(r"^\[!(\w+)\]\s*(.*)", clean_text)
+    if c_match:
+      c_type = c_match.group(1).lower()
+      c_body = clean_text[len(c_match.group(0)):].strip()
+      callouts.append({"type": c_type, "title": c_match.group(2), "content": c_body})
+      if c_type == "quote" or '"' in clean_text:
+        quotes.append(clean_text.replace('[!quote]', '').strip())
+    elif '"' in clean_text:
+      quotes.append(clean_text)
+
+  return callouts, quotes
+
+def parse_food_file_100_percent_comprehensive(content):
   data = {}
   data["content_hash"] = calculate_md5(content)
+  data["full_markdown_content"] = content
 
-  # Portion State (Cooked vs Raw)
+  # Portion State (Cooked vs Raw/Dry)
   if "cooked" in content.lower():
     data["portion_state"] = "cooked"
   elif "raw" in content.lower() or "dry" in content.lower():
@@ -32,106 +84,60 @@ def parse_food_file(content, filename):
   else:
     data["portion_state"] = "unspecified"
 
-  # Quotes ([!quote] or blockquote)
-  quotes = re.findall(r"^>\s+\[!quote\]\s*\n>\s+\"(.*)\"", content, re.MULTILINE)
-  if not quotes:
-    quotes = re.findall(r"\"([^\"]{20,})\"", content)
-  if quotes:
-    data["quotes"] = [q.strip() for q in quotes if len(q) > 15][:3]
+  # Tables (Macros, Quick Reference, Minerals, Vitamins, Amino Acids, Synergies)
+  tables = parse_all_markdown_tables(content)
+  data["tables"] = tables
 
-  # Overview Snapshot ([!success] callout)
-  snapshot = re.search(r"^>\s+\[!success\]\s*(.*?)(?=\n---|^\n|\Z)", content, re.DOTALL | re.MULTILINE)
-  if snapshot:
-    data["sports_nutrition_snapshot"] = snapshot.group(1).replace(">", "").strip()
+  for t in tables:
+    h_lower = [h.lower() for h in t["headers"]]
+    h_str = " ".join(h_lower)
 
-  # 1. Parse 2-Column Vertical Table (| Attribute | Value |)
-  table_rows = re.findall(r"^\|([^|]+)\|([^|]+)\|\s*$", content, re.MULTILINE)
-  for row in table_rows:
-    attr = row[0].strip()
-    val = row[1].strip()
+    if "mineral" in h_str:
+      data["minerals_breakdown"] = t["rows"]
+    elif "vitamin" in h_str and "amount" not in h_str:
+      data["vitamins_breakdown"] = t["rows"]
+    elif "amino acid" in h_str:
+      data["amino_acids_breakdown"] = t["rows"]
+    elif "paired with" in h_str:
+      data["food_synergies"] = t["rows"]
+    elif "amount" in h_str or "portion" in h_str:
+      data["quick_reference_servings"] = t["rows"]
+    elif "calories" in h_str or "attribute" in h_str:
+      # Flat macro attributes
+      for r in t["rows"]:
+        if "Attribute" in r and "Value" in r:
+          k = r["Attribute"].lower().replace(" ", "_").replace("(", "").replace(")", "").replace("+", "").replace("/", "_")
+          data[k] = r["Value"]
+        else:
+          for k, v in r.items():
+            clean_k = k.lower().replace(" ", "_").replace("(", "").replace(")", "").replace("+", "").replace("/", "_")
+            data[clean_k] = v
 
-    if attr.lower() in ["attribute", "---", "variety", "paired with", "amount", "mineral", "vitamin", "amino acid", "paired with"]:
-      continue
-
-    clean_key = attr.lower().replace(" ", "_").replace("(", "").replace(")", "").replace("+", "").replace("/", "_")
-    
-    clean_val = val
-    if val.lower() in ["yes", "true"]: clean_val = True
-    elif val.lower() in ["no", "false"]: clean_val = False
-    else:
-      num_match = re.search(r"^([\d\.,]+)", val)
-      if num_match:
-        raw_num = num_match.group(1).replace(",", "")
-        try:
-          if "." in raw_num: clean_val = float(raw_num)
-          else: clean_val = int(raw_num)
-        except ValueError:
-          pass
-
-    data[clean_key] = clean_val
-
-  # 2. Parse YAML Frontmatter if present
+  # YAML Frontmatter if present
   fm_match = re.search(r"^---\s*\n(.*?)\n---", content, re.DOTALL)
   if fm_match:
-    yaml_text = fm_match.group(1)
-    for line in yaml_text.split("\n"):
+    for line in fm_match.group(1).split("\n"):
       line = line.strip()
-      if not line or line.startswith("#"): continue
-      if ":" in line:
+      if ":" in line and not line.startswith("#"):
         k, v = line.split(":", 1)
         k = k.strip().lower().replace(" ", "_")
         v = v.strip().strip('"\'')
-        if v.lower() == "true": v = True
-        elif v.lower() == "false": v = False
-        elif v == "": v = 0
-        else:
-          try:
-            if "." in v: v = float(v)
-            else: v = int(v)
-          except ValueError: pass
-        if k not in data:
-          data[k] = v
+        data[k] = v
 
-  # 3. Parse Quick Reference Portion Conversions Table
-  quick_ref_match = re.search(r"### Quick Reference.*?\n(\|.*?)(?=\n\n|\n#|\Z)", content, re.DOTALL)
-  if quick_ref_match:
-    q_rows = re.findall(r"^\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|(?:([^|]+)\|)?", quick_ref_match.group(1), re.MULTILINE)
-    portion_list = []
-    for r in q_rows:
-      amt = r[0].strip()
-      if amt.lower() in ["amount", "---", "amount (cooked)", "amount (raw)"]: continue
-      portion_list.append({
-        "portion": amt,
-        "calories": r[1].strip(),
-        "protein": r[2].strip(),
-        "fat": r[3].strip()
-      })
-    if portion_list:
-      data["quick_reference_servings"] = portion_list
+  # Callouts and Quotes
+  callouts, quotes = parse_callouts_and_quotes(content)
+  data["callouts"] = callouts
+  data["quotes"] = quotes
 
-  # 4. Parse Food Synergies Table
-  synergies = []
-  synergy_rows = re.findall(r"^\|([^|]+)\|([^|]+)\|([^|]+)\|\s*$", content, re.MULTILINE)
-  for s_row in synergy_rows:
-    paired = s_row[0].strip().replace("[[", "").replace("]]", "")
-    synergy = s_row[1].strip()
-    mechanism = s_row[2].strip()
-    if paired.lower() in ["paired with", "---", "amount (cooked)", "amount (raw)", "mineral", "vitamin", "amino acid", "variety"]: continue
-    synergies.append({"paired_with": paired, "synergy": synergy, "mechanism": mechanism})
-  if synergies:
-    data["food_synergies"] = synergies
-
-  # 5. Parse Dosage & Timing Guidance Section
+  # Sections (Dosage & Timing, Good Energy Relevance, Meal Ideas)
   dosage_match = re.search(r"## Dosage Guidance\s*\n(.*?)(?=\n##|\Z)", content, re.DOTALL)
   if dosage_match:
     data["dosage_and_timing_guidance"] = dosage_match.group(1).strip()
 
-  # 6. Parse Meal Ideas Section
   meal_ideas_match = re.search(r"## Meal Ideas\s*\n(.*?)(?=\n##|\Z)", content, re.DOTALL)
   if meal_ideas_match:
     data["meal_ideas"] = meal_ideas_match.group(1).strip()
 
-  # 7. Parse Good Energy Relevance Section
   ge_match = re.search(r"## Good Energy Relevance\s*\n(.*?)(?=\n##|\Z)", content, re.DOTALL)
   if ge_match:
     data["good_energy_relevance"] = ge_match.group(1).strip()
@@ -140,7 +146,7 @@ def parse_food_file(content, filename):
 
 def generate_ddl_and_seed():
   sql_lines = [
-    "-- Create Food Library table with rich JSONB schema",
+    "-- Create Food Library table with 100% comprehensive raw_payload schema",
     "create table if not exists food_library (",
     "  id uuid primary key default gen_random_uuid(),",
     "  name text not null unique,",
@@ -158,21 +164,23 @@ def generate_ddl_and_seed():
   ]
 
   food_files = [f for f in os.listdir(foods_dir) if f.endswith(".md")]
-  print(f"Parsing {len(food_files)} Food files...")
+  print(f"Parsing {len(food_files)} Food files with 100% comprehensive extractor...")
   for ff in food_files:
     path = os.path.join(foods_dir, ff)
     with open(path, "r", encoding="utf-8") as f:
       content = f.read()
-    fm = parse_food_file(content, ff)
+    fm = parse_food_file_100_percent_comprehensive(content)
     name = ff.replace(".md", "").replace("'", "''")
     cat = str(fm.get("food_category", "general")).replace("'", "''")
-    cal = fm.get("calories_per_100g", fm.get("calories", 0)) or 0
-    pro = fm.get("protein_per_100g", fm.get("protein", 0)) or 0
-    carb = fm.get("carbs_per_100g", fm.get("carbs", 0)) or 0
-    fat = fm.get("fat_per_100g", fm.get("fat", 0)) or 0
-    fib = fm.get("fibre_per_100g", fm.get("fibre", 0)) or 0
-    om3 = fm.get("omega3_per_100g_mg", fm.get("omega-3_epadha", 0)) or 0
+    
+    cal = clean_number(fm.get("calories_per_100g", fm.get("calories", fm.get("calories_per_unit", 0))))
+    pro = clean_number(fm.get("protein_per_100g", fm.get("protein", fm.get("protein_per_unit_g", 0))))
+    carb = clean_number(fm.get("carbs_per_100g", fm.get("carbs", fm.get("carbs_per_unit_g", 0))))
+    fat = clean_number(fm.get("fat_per_100g", fm.get("fat", fm.get("fat_per_unit_g", 0))))
+    fib = clean_number(fm.get("fibre_per_100g", fm.get("fibre", fm.get("fibre_per_unit_g", 0))))
+    om3 = clean_number(fm.get("omega3_per_100g_mg", fm.get("omega-3_epadha", 0)))
     soil = fm.get("seed_oil", False)
+    if isinstance(soil, str): soil = soil.lower() in ["true", "yes"]
 
     raw_json = json.dumps(fm).replace("'", "''")
 
@@ -187,7 +195,7 @@ def generate_ddl_and_seed():
   with open("supabase_nutrition_schema_and_seed.sql", "w", encoding="utf-8") as out:
     out.write("\n".join(sql_lines))
 
-  print("Generated supabase_nutrition_schema_and_seed.sql successfully!")
+  print("Generated 100% comprehensive supabase_nutrition_schema_and_seed.sql successfully!")
 
 if __name__ == "__main__":
   generate_ddl_and_seed()
