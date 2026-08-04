@@ -24,9 +24,19 @@ def clean_number(val):
   return 0
 
 def parse_all_markdown_tables(content):
-  """Extracts ALL markdown tables from content into structured JSON lists of rows."""
+  """Extracts ALL markdown tables from content (including tables nested inside > callouts)."""
+  # Strip leading blockquote markers for table parsing
+  clean_lines = []
+  for line in content.split("\n"):
+    stripped = line.strip()
+    if stripped.startswith(">"):
+      stripped = stripped.lstrip(">").strip()
+    clean_lines.append(stripped)
+
+  clean_content = "\n".join(clean_lines)
+
   tables = []
-  raw_tables = re.findall(r"((?:\|[^\n]+\|\n)+)", content)
+  raw_tables = re.findall(r"((?:\|[^\n]+\|\n)+)", clean_content)
   for t in raw_tables:
     lines = [line.strip() for line in t.strip().split("\n") if line.strip()]
     if len(lines) < 2:
@@ -59,13 +69,14 @@ def parse_callouts_and_quotes(content):
   blocks = re.findall(r"(?:^>[^\n]*\n?)+", content, re.MULTILINE)
   for b in blocks:
     clean_text = "\n".join([line.lstrip("> ").strip() for line in b.split("\n") if line.strip()])
-    c_match = re.search(r"^\[!(\w+)\]\s*(.*)", clean_text)
+    c_match = re.search(r"^\[!(\w+)\][-+]?\s*(.*)", clean_text)
     if c_match:
       c_type = c_match.group(1).lower()
+      c_title = c_match.group(2).strip()
       c_body = clean_text[len(c_match.group(0)):].strip()
-      callouts.append({"type": c_type, "title": c_match.group(2), "content": c_body})
+      callouts.append({"type": c_type, "title": c_title, "content": c_body})
       if c_type == "quote" or '"' in clean_text:
-        quotes.append(clean_text.replace('[!quote]', '').strip())
+        quotes.append(clean_text.replace(f"[!{c_type}]", "").strip())
     elif '"' in clean_text:
       quotes.append(clean_text)
 
@@ -129,18 +140,14 @@ def parse_food_file_100_percent_comprehensive(content):
   data["callouts"] = callouts
   data["quotes"] = quotes
 
-  # Sections (Dosage & Timing, Good Energy Relevance, Meal Ideas)
-  dosage_match = re.search(r"## Dosage Guidance\s*\n(.*?)(?=\n##|\Z)", content, re.DOTALL)
+  # Sections or Callout Sections (Dosage & Timing, Good Energy Relevance, Meal Ideas)
+  dosage_match = re.search(r"(?:##|> \[!warning\][-+]?)\s*⏱️?\s*Dosage.*?\n(.*?)(?=\n##|\n> \[!|\Z)", content, re.DOTALL | re.IGNORECASE)
   if dosage_match:
-    data["dosage_and_timing_guidance"] = dosage_match.group(1).strip()
+    data["dosage_and_timing_guidance"] = dosage_match.group(1).replace(">", "").strip()
 
-  meal_ideas_match = re.search(r"## Meal Ideas\s*\n(.*?)(?=\n##|\Z)", content, re.DOTALL)
-  if meal_ideas_match:
-    data["meal_ideas"] = meal_ideas_match.group(1).strip()
-
-  ge_match = re.search(r"## Good Energy Relevance\s*\n(.*?)(?=\n##|\Z)", content, re.DOTALL)
+  ge_match = re.search(r"(?:##|> \[!tip\][-+]?)\s*🥗?\s*Good Energy Relevance.*?\n(.*?)(?=\n##|\n> \[!|\Z)", content, re.DOTALL | re.IGNORECASE)
   if ge_match:
-    data["good_energy_relevance"] = ge_match.group(1).strip()
+    data["good_energy_relevance"] = ge_match.group(1).replace(">", "").strip()
 
   return data
 
