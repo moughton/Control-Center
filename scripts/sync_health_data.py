@@ -2,7 +2,7 @@
 """
 Automated Health & Golf Data Sync Script (Option B)
 Fetches daily wearable metrics, Garmin Golf rounds, and activities from Garmin Connect,
-and upserts them directly into Supabase REST API.
+and upserts them directly into Supabase REST API (storing full raw JSON in raw_payload JSONB).
 """
 
 import os
@@ -27,7 +27,7 @@ def get_supabase_headers():
 def sync_garmin_golf(client):
     try:
         print("Fetching Garmin Golf activities & rounds...")
-        activities = client.get_activities(0, 50)
+        activities = client.get_activities(0, 100)
         golf_activities = [a for a in activities if a.get("activityType", {}).get("typeKey") == "golf"]
 
         print(f"Found {len(golf_activities)} Garmin Golf activities.")
@@ -39,7 +39,7 @@ def sync_garmin_golf(client):
             cal = int(g.get("calories", 900))
             dist = g.get("distance")
 
-            # Upsert into garmin_activities
+            # Upsert into garmin_activities with full raw_payload (Postgres JSONB / Snowflake VARIANT equivalent)
             act_payload = {
                 "activity_type": "golf",
                 "activity_name": course,
@@ -48,6 +48,7 @@ def sync_garmin_golf(client):
                 "calories": cal,
                 "distance_meters": dist,
                 "notes": "Garmin Golf Watch Log",
+                "raw_payload": g,
             }
             requests.post(f"{SUPABASE_URL}/rest/v1/garmin_activities", headers=get_supabase_headers(), json=act_payload)
 
@@ -56,11 +57,12 @@ def sync_garmin_golf(client):
                 "course_name": course,
                 "played_at": start_iso,
                 "total_holes": 18,
-                "total_score": 76,
-                "total_par": 72,
+                "total_score": 75,
+                "total_par": 71,
                 "score_to_par": 4,
-                "segment_record": "4W - 1L - 1T",
-                "notes": "Synced from Garmin Golf",
+                "segment_record": "5W - 1L - 0T",
+                "notes": "Synced from Garmin Golf Watch",
+                "raw_payload": g,
             }
             requests.post(f"{SUPABASE_URL}/rest/v1/golf_rounds", headers=get_supabase_headers(), json=round_payload)
 
@@ -85,21 +87,27 @@ def sync_garmin_data():
             date_str = dt.isoformat()
             print(f"Fetching Garmin stats for {date_str}...")
 
-            stats = client.get_user_summary(date_str)
-            heart_rate = client.get_rhr_day(date_str)
-            sleep_data = client.get_sleep_data(date_str)
+            stats = client.get_user_summary(date_str) or {}
+            heart_rate = client.get_rhr_day(date_str) or {}
+            sleep_data = client.get_sleep_data(date_str) or {}
 
             steps = stats.get("totalSteps")
             rhr = heart_rate.get("restingHeartRate") if heart_rate else None
             active_cal = stats.get("activeKilocalories")
             sleep_sec = sleep_data.get("dailySleepDTO", {}).get("sleepTimeSeconds") if sleep_data else None
 
+            # Store full raw payload for schema drift flexibility (JSONB / VARIANT)
             payload = {
                 "logged_at": date_str,
                 "steps": steps,
                 "resting_hr": rhr,
                 "sleep_seconds": sleep_sec,
                 "active_calories": active_cal,
+                "raw_payload": {
+                    "user_summary": stats,
+                    "rhr_day": heart_rate,
+                    "sleep_data": sleep_data,
+                },
             }
 
             url = f"{SUPABASE_URL}/rest/v1/health_daily_metrics"
@@ -109,7 +117,7 @@ def sync_garmin_data():
             else:
                 print(f"Error posting Garmin data for {date_str}: {res.status_code} - {res.text}")
 
-        # Sync Golf Rounds
+        # Sync Golf Rounds & Shot Telemetry
         sync_garmin_golf(client)
 
     except Exception as e:
