@@ -350,6 +350,44 @@ export default function Golf() {
                     })}
                   </div>
 
+                  {/* Front 9 (Out), Back 9 (In), and Total Score KPI Cards */}
+                  {selectedRoundHoles.length > 0 && (() => {
+                    const frontNineHoles = selectedRoundHoles.filter((h) => h.hole_number <= 9)
+                    const backNineHoles = selectedRoundHoles.filter((h) => h.hole_number >= 10)
+
+                    const frontPar = frontNineHoles.reduce((acc, h) => acc + h.par, 0)
+                    const frontScore = frontNineHoles.reduce((acc, h) => acc + h.score, 0)
+                    const frontDiff = frontScore - frontPar
+
+                    const backPar = backNineHoles.reduce((acc, h) => acc + h.par, 0)
+                    const backScore = backNineHoles.reduce((acc, h) => acc + h.score, 0)
+                    const backDiff = backScore - backPar
+
+                    const totalPar = frontPar + backPar
+                    const totalScore = frontScore + backScore
+                    const totalDiff = totalScore - totalPar
+
+                    return (
+                      <div className="analytics-kpi-grid" style={{ marginTop: '14px', marginBottom: '16px' }}>
+                        <div className="analytics-kpi-card">
+                          <span className="kpi-label">OUT (Front 9)</span>
+                          <span className="kpi-value">{frontScore}</span>
+                          <span className="kpi-sub">Par {frontPar} · {frontDiff === 0 ? 'E' : frontDiff > 0 ? `+${frontDiff}` : frontDiff}</span>
+                        </div>
+                        <div className="analytics-kpi-card">
+                          <span className="kpi-label">IN (Back 9)</span>
+                          <span className="kpi-value">{backScore}</span>
+                          <span className="kpi-sub">Par {backPar} · {backDiff === 0 ? 'E' : backDiff > 0 ? `+${backDiff}` : backDiff}</span>
+                        </div>
+                        <div className="analytics-kpi-card" style={{ borderLeft: '4px solid var(--accent)' }}>
+                          <span className="kpi-label">TOTAL SCORE (18)</span>
+                          <span className="kpi-value" style={{ color: 'var(--accent)' }}>{totalScore}</span>
+                          <span className="kpi-sub">Par {totalPar} · {totalDiff === 0 ? 'E' : totalDiff > 0 ? `+${totalDiff}` : totalDiff}</span>
+                        </div>
+                      </div>
+                    )
+                  })()}
+
                   {/* Interactive Leaflet Satellite Shot Map Component */}
                   <GolfShotMap
                     holeNumber={activeViewHole}
