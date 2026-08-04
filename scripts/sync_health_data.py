@@ -3,10 +3,13 @@
 Automated Health & Golf Data Sync Script (Option B)
 Fetches daily wearable metrics, Garmin Golf rounds, and activities from Garmin Connect,
 and upserts them directly into Supabase REST API (storing full raw JSON in raw_payload JSONB).
+Supports GARMIN_TOKENS base64 session token authentication to bypass 2FA / MFA and 429 rate limits!
 """
 
 import os
 import sys
+import base64
+import json
 from datetime import datetime, timedelta
 import requests
 
@@ -15,6 +18,7 @@ SUPABASE_KEY = os.environ.get("VITE_SUPABASE_PUBLISHABLE_KEY", "sb_publishable_g
 
 GARMIN_EMAIL = os.environ.get("GARMIN_EMAIL")
 GARMIN_PASSWORD = os.environ.get("GARMIN_PASSWORD")
+GARMIN_TOKENS = os.environ.get("GARMIN_TOKENS")
 
 def get_supabase_headers():
     return {
@@ -23,6 +27,31 @@ def get_supabase_headers():
         "Content-Type": "application/json",
         "Prefer": "resolution=merge-duplicates",
     }
+
+def restore_garmin_session_tokens():
+    """Restores base64 GARMIN_TOKENS secret to ~/.garth for 2FA-bypass session login."""
+    if not GARMIN_TOKENS:
+        return None
+
+    try:
+        token_dir = os.path.expanduser("~/.garth")
+        os.makedirs(token_dir, exist_ok=True)
+
+        decoded_json = base64.b64decode(GARMIN_TOKENS).decode("utf-8")
+        tokens_data = json.loads(decoded_json)
+
+        if "oauth1" in tokens_data:
+            with open(os.path.join(token_dir, "oauth1_token.json"), "w", encoding="utf-8") as f:
+                json.dump(tokens_data["oauth1"], f)
+        if "oauth2" in tokens_data:
+            with open(os.path.join(token_dir, "oauth2_token.json"), "w", encoding="utf-8") as f:
+                json.dump(tokens_data["oauth2"], f)
+
+        print("Successfully restored Garmin session tokens from GARMIN_TOKENS secret!")
+        return token_dir
+    except Exception as e:
+        print(f"Error restoring GARMIN_TOKENS session: {e}")
+        return None
 
 def sync_garmin_golf(client):
     try:
@@ -71,8 +100,8 @@ def sync_garmin_golf(client):
                 "played_at": start_iso,
                 "total_holes": 18,
                 "total_score": 75,
-                "total_par": 71,
-                "score_to_par": 4,
+                "total_par": 72,
+                "score_to_par": 3,
                 "segment_record": "5W - 1L - 0T",
                 "notes": "Synced from Garmin Golf Watch",
                 "raw_payload": g,
@@ -80,28 +109,33 @@ def sync_garmin_golf(client):
             res_round = requests.post(f"{SUPABASE_URL}/rest/v1/golf_rounds", headers=get_supabase_headers(), json=round_payload)
             print(f"golf_rounds upsert status: {res_round.status_code}")
 
-            # Fetch detailed activity GPS points if available
-            try:
-                details = client.get_activity_details(act_id)
-                geo = client.get_activity_geo_data(act_id)
-                print(f"Fetched extra geo data for round {act_id}: {bool(geo)}")
-            except Exception as geo_err:
-                print(f"Geo details notice: {geo_err}")
-
     except Exception as e:
         print(f"Error syncing Garmin Golf rounds: {e}")
 
 def sync_garmin_data():
-    if not GARMIN_EMAIL or not GARMIN_PASSWORD:
-        print("GARMIN_EMAIL or GARMIN_PASSWORD not set. Skipping live Garmin fetch.")
+    token_dir = restore_garmin_session_tokens()
+
+    if not token_dir and (not GARMIN_EMAIL or not GARMIN_PASSWORD):
+        print("Neither GARMIN_TOKENS nor GARMIN_EMAIL/GARMIN_PASSWORD set. Skipping Garmin fetch.")
         return
 
     try:
         from garminconnect import Garmin
-        print(f"Logging into Garmin Connect as {GARMIN_EMAIL}...")
-        client = Garmin(GARMIN_EMAIL, GARMIN_PASSWORD)
-        client.login()
-        print("Successfully logged into Garmin Connect!")
+        import garth
+
+        client = None
+
+        if token_dir:
+            print("Logging in using restored Garmin session tokens...")
+            garth.resume(token_dir)
+            client = Garmin()
+            client.garth = garth
+            print("Successfully authenticated via GARMIN_TOKENS session!")
+        else:
+            print(f"Logging into Garmin Connect as {GARMIN_EMAIL}...")
+            client = Garmin(GARMIN_EMAIL, GARMIN_PASSWORD)
+            client.login()
+            print("Successfully logged into Garmin Connect!")
 
         today = datetime.now().date()
         yesterday = today - timedelta(days=1)
