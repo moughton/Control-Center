@@ -66,7 +66,7 @@ export default function GolfShotMap({
       )
 
       const map = L.map(mapContainerRef.current, {
-        center: [49.1341, -123.1168],
+        center: [49.1360, -123.1172],
         zoom: 17,
         layers: [satelliteTiles],
         zoomControl: true,

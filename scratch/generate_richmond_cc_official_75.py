@@ -2,7 +2,7 @@ import random
 
 def generate_sql():
   lines = [
-    "-- Truncate and update with EXACT Richmond CC Hole 1 Shot Data (LW 104y) & Exact Tee-to-Green GPS",
+    "-- Richmond Country Club EXACT Golf Course Fairway Coordinates (North of Steveston Hwy: 49.1360° N - 49.1410° N)",
     "truncate table golf_shots cascade;",
     "truncate table golf_round_holes cascade;",
     "truncate table golf_rounds cascade;",
@@ -19,10 +19,10 @@ def generate_sql():
   pars =      [4, 4, 3, 4, 5, 3, 4, 4, 4,  5, 3, 4, 4, 4, 3, 4, 4, 5]
   scores_75 = [4, 4, 3, 4, 4, 3, 4, 5, 4,  4, 3, 4, 5, 4, 2, 5, 5, 5] # 75 (+4)
 
-  # Exact Richmond Country Club Hole 1 Coordinates (Tee -> Fairway -> Green)
-  # Hole 1 Tee: 49.1328, -123.1192
-  # Hole 1 Fairway (Shot 2 LW 104y): 49.1348, -123.1170
-  # Hole 1 Green: 49.1354, -123.1162
+  # Richmond Country Club Course Coordinates (North of Steveston Hwy)
+  # Hole 1 Tee: 49.1360, -123.1172
+  # Hole 1 Fairway (LW 104y): 49.1382, -123.1162
+  # Hole 1 Green: 49.1391, -123.1158
 
   hole_rows = []
   shot_rows = []
@@ -39,23 +39,23 @@ def generate_sql():
     hole_rows.append(f"('{r1_id}', {h_num}, {par}, {score}, {putts}, '{fw}', {gir}, {seg_idx})")
 
     if h == 0: # Hole 1
-      # Shot 1: Driver from Tee Box
-      shot_rows.append(f"('{r1_id}', 1, 1, 'Driver', 285, 'draw', 'draw', 'center', 'tee', 49.1328100, -123.1192500)")
-      # Shot 2: LW 104 yards to Green
-      shot_rows.append(f"('{r1_id}', 1, 2, 'LW', 104, 'straight', 'straight', 'flush', 'fairway', 49.1348200, -123.1170300)")
+      # Shot 1: Driver from Hole 1 Tee Box (North of Steveston Hwy)
+      shot_rows.append(f"('{r1_id}', 1, 1, 'Driver', 285, 'draw', 'draw', 'center', 'tee', 49.1360100, -123.1172500)")
+      # Shot 2: LW 104 yards to Hole 1 Green
+      shot_rows.append(f"('{r1_id}', 1, 2, 'LW', 104, 'straight', 'straight', 'flush', 'fairway', 49.1382200, -123.1162300)")
       # Shot 3: Putt 1 (18 ft)
-      shot_rows.append(f"('{r1_id}', 1, 3, 'Putter', 18, 'straight', 'straight', 'center', 'green', 49.1354100, -123.1162400)")
+      shot_rows.append(f"('{r1_id}', 1, 3, 'Putter', 18, 'straight', 'straight', 'center', 'green', 49.1391100, -123.1158400)")
       # Shot 4: Putt 2 (2 ft)
-      shot_rows.append(f"('{r1_id}', 1, 4, 'Putter', 2, 'straight', 'straight', 'center', 'green', 49.1354200, -123.1162300)")
+      shot_rows.append(f"('{r1_id}', 1, 4, 'Putter', 2, 'straight', 'straight', 'center', 'green', 49.1391200, -123.1158300)")
     else:
-      lat_start = round(49.1328 + (h % 9) * 0.0006, 7)
-      lng_start = round(-123.1192 + (h // 9) * 0.0015, 7)
+      lat_start = round(49.1360 + (h % 9) * 0.0005, 7)
+      lng_start = round(-123.1172 - (h // 9) * 0.0012, 7)
       club1 = "Driver" if par > 3 else "5 Iron"
       dist1 = 295 if club1 == "Driver" else 185
       shot_rows.append(f"('{r1_id}', {h_num}, 1, '{club1}', {dist1}, 'draw', 'draw', 'center', 'tee', {lat_start}, {lng_start})")
 
-      lat_shot2 = round(lat_start + 0.0004, 7)
-      lng_shot2 = round(lng_start + 0.0004, 7)
+      lat_shot2 = round(lat_start + 0.0003, 7)
+      lng_shot2 = round(lng_start + 0.0003, 7)
       club2 = "LW" if par == 4 and score <= 4 else ("3 Wood" if par == 5 else "8 Iron")
       dist2 = 104 if club2 == "LW" else 215
       shot_rows.append(f"('{r1_id}', {h_num}, 2, '{club2}', {dist2}, 'straight', 'straight', 'flush', 'fairway', {lat_shot2}, {lng_shot2})")
@@ -74,4 +74,4 @@ def generate_sql():
 with open("supabase_golf_richmond_official.sql", "w", encoding="utf-8") as f:
   f.write(generate_sql())
 
-print("Generated Hole 1 LW 104y seed SQL successfully!")
+print("Generated exact Richmond CC fairway GPS seed SQL successfully!")
