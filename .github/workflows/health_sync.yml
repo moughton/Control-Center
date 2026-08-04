@@ -1,0 +1,33 @@
+name: Automated Health Data Sync (Garmin & Renpho)
+
+on:
+  schedule:
+    # Run daily at 06:00 UTC (morning sync)
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync-health:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests garminconnect
+
+      - name: Run Health Data Sync
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
+          GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
+        run: |
+          python scripts/sync_health_data.py

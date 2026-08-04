@@ -31,3 +31,35 @@ export function formatDateLong(dateStr: string): string {
     year: 'numeric',
   })
 }
+
+export function getMondayLocalISO(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  const day = dt.getDay() // 0 = Sun, 1 = Mon, ...
+  const diff = dt.getDate() - (day === 0 ? 6 : day - 1)
+  const monday = new Date(dt.setDate(diff))
+  return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`
+}
+
+export function formatDateShort(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
+export function formatWeekdayShort(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    weekday: 'short',
+  })
+}
+
+export function formatDayNum(dateStr: string): string {
+  const parts = dateStr.split('-')
+  return String(Number(parts[2]))
+}
+
+

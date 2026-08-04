@@ -4,33 +4,31 @@
 
 This file only adds what changes moment-to-moment: what's currently in progress and not yet committed.
 
-## Handoff: GTG stats feature (in progress, uncommitted)
+## Branch: `gemini`
 
-Building out target/streak/personal-best/trend features for the GTG (Grease the Groove) facet, per direct user request. Scope agreed with the user:
+### GTG Stats, Bullet Graphs & Target History (Completed)
+- **Mandatory Daily Target**: Enforced `daily_target` as mandatory (`NOT NULL`, min 1) when creating or managing exercises.
+- **Stephen Few Bullet Graph**: Replaced basic progress bar with a 3-band qualitative Bullet Graph (`BulletChart`) displaying actual reps vs vertical target marker line on exercise cards & detail modal.
+- **Target History Table & Engine** ([`supabase_gtg_targets_schema.sql`](file:///C:/_git/Control-Center/supabase_gtg_targets_schema.sql)): Created `gtg_target_history` table live in Supabase. Evaluates daily targets dynamically over time (`getTargetForDate`) so historical streaks and progress accurately retain target changes.
+- **Target History Manager**: Detail modal allows updating target and effective date, displaying a chronological history of past targets.
+- **Extended Quick Reps**: Quick-select rep choices extended up to 100 (`[5, 10, 15, 20, 25, 30, 35, 40, 50, 60, 75, 100]`).
+- **Visual Date Ribbon & Past-Date Logging**: Interactive 7-day visual date strip with calendar date picker, previous/next day stepping, and past-date rep logging. Restricted from navigating into future dates, with Today pinned as a permanent option.
 
-- Optional daily rep target per exercise
-- A progress bar on each exercise card showing today's total against that target (subtle, single muted color — see the "no ugly dots" convention in `CLAUDE.md`, this replaced an earlier rejected design)
-- Current streak + best-streak-ever (consecutive days the target was met)
-- Personal best (highest single-day rep count, with the date)
-- 7-day trend mini-sparkline (monochrome, in the detail modal — not on the compact card)
-- Rolling volume: this-week and year-to-date totals
-- A milestone toast: brief auto-dismissing banner on a new personal best or crossing a 1,000-lifetime-rep boundary per exercise
+### Consolidated Analytics Dashboard (Completed)
+- **Analytics Facet** ([`src/Analytics.tsx`](file:///C:/_git/Control-Center/src/Analytics.tsx)): Built multi-facet analytics dashboard wired into `#analytics` tab in [`src/App.tsx`](file:///C:/_git/Control-Center/src/App.tsx).
+- **Time Window Filters**: `7 Days`, `30 Days`, `Year to Date`, `All Time`.
+- **Top KPI Cards**: GTG Total Reps, Task Completion Count, Active Target Streaks.
+- **Volume & Task Breakdowns**: Rep distribution per exercise and completions per category (styled with category color swatches).
+- **Unified Activity Feed**: Chronological list of recent GTG workout logs and task completions.
 
-### Done so far
-- DB migration applied: `gtg_exercises.daily_target` (nullable integer) — already live in Supabase project `ivdkdvtmkmpnbfandmbc`.
-- `src/types.ts`: `GtgExercise.daily_target: number | null` added.
-- `src/lib/dates.ts` created — extracted the local-date helpers (`todayLocalISO`, `addDaysLocalISO`, `daysFromToday`, `formatDateLong`) out of `RecurringTasks.tsx` into a shared module, since the streak calculation needs the same day-by-day date arithmetic. `RecurringTasks.tsx` now imports from there instead of defining its own copies.
+### Dedicated Golf Facet & Live On-Course Scorecard (Completed & Live)
+- **Golf Facet** ([`src/Golf.tsx`](file:///C:/_git/Control-Center/src/Golf.tsx)): Dedicated golf facet wired into `#golf` tab in [`src/App.tsx`](file:///C:/_git/Control-Center/src/App.tsx).
+- **Rounds & Shot Maps**: Displays Garmin round logs, scorecards, 3-hole match segment records, and shot breakdown logs.
+- **3-Hole Match Play Engine (Nassau Chunks)**: Evaluates 3-hole blocks (Under par = Win 🟢, Even = Tie 🟡, Over par = Loss 🔴) with match record tracking (e.g. `4W - 1L - 1T`).
+- **Live On-Course Scorecard**: 1-tap fast score logging, hole-by-hole par/score/putts, Fairway/GIR results, intended vs actual shot shape, strike impact location, and **📍 GPS Shot Location Tagging** via `navigator.geolocation`.
+- **Database Tables Executed**: Created `golf_rounds`, `golf_round_holes`, and `golf_shots` live on Supabase project `ivdkdvtmkmpnbfandmbc`.
 
-### Not started yet
-- `src/Gtg.tsx` has **not** been touched for any of this. It still only shows "N reps today" per exercise with no target/streak/PB/trend logic at all. Still needed:
-  1. Switch the data fetch from "today's logs only" to **all** logs per exercise (needed to compute historical daily totals for streak/PB/trend/volume) — small dataset at this app's scale, fine to aggregate client-side.
-  2. A stats computation (e.g. `computeExerciseStats(logs, target, todayISO)`) returning: today's total, a daily-totals map, personal best `{reps, date}`, current streak, best streak ever, last-7-days array, this-week total, year-to-date total, lifetime total.
-  3. Compact card: add the target-scaled progress bar + a small streak badge (only when a target is set — exercises without a target keep the current plain "N reps today" text).
-  4. Detail modal: editable daily target field, PB with date, current/best streak, this-week/YTD totals, the 7-day trend sparkline, on top of the existing today's-entries list + delete that's already there.
-  5. "+ Add exercise" form: add an optional daily-target number input.
-  6. Milestone toast: ephemeral state + auto-dismiss, triggered from `logReps()` by comparing pre/post stats.
-  7. New CSS for all of the above in `App.css` (progress bar, streak badge, stats rows, trend sparkline, toast).
-- Not yet type-checked, built, or tested in a browser since starting this feature.
-
-### Verification expected before calling it done
-Per `CLAUDE.md`'s testing practice: `npx tsc --noEmit`, `npm run build`, then actually exercise it in a real browser against the dev server — including seeding a few days of historical `gtg_logs` rows via SQL (through the Supabase MCP tools or dashboard) to verify streak/PB/trend math, since that can't be validated by logging reps in a single live session. Clean up any seeded test data afterward.
+### Status
+- Branch `gemini` checked out.
+- Type check (`npx tsc --noEmit`) passes cleanly.
+- Build (`npm run build`) succeeds cleanly.
