@@ -44,7 +44,7 @@ export default function GreenContourViewer({ holeNumber, par, courseName = 'Rich
         <img
           src={imgUrl}
           alt={`Richmond Country Club Hole ${holeNumber} Green Contour Map`}
-          style={{ maxWidth: '100%', maxHeight: '480px', objectFit: 'contain', borderRadius: '6px' }}
+          style={{ maxWidth: '100%', maxHeight: '650px', objectFit: 'contain', borderRadius: '6px' }}
         />
       </div>
 
