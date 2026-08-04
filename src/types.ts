@@ -39,6 +39,7 @@ export interface RecurringTaskCompletion {
 export interface GtgExercise {
   id: string
   name: string
+  daily_target: number | null
   created_at: string
 }
 
