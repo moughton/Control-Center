@@ -193,15 +193,16 @@ export default function GolfShotMap({
     <div className="shot-map-wrapper" style={{ marginTop: '12px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
         <h4 style={{ margin: 0 }}>
-          ⛳ Hole #{holeNumber} Satellite Shot Map (Par {par}) — {validShotsWithGps.length} Source GPS Shots
+          ⛳ Hole #{holeNumber} Satellite Shot Map (Par {par}) — Vertical Layout
         </h4>
+        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Tee 📍 (Bottom) → Green 🏁 (Top)</span>
       </div>
 
       <div
         ref={mapContainerRef}
         style={{
           width: '100%',
-          height: '280px',
+          height: '380px',
           borderRadius: '12px',
           overflow: 'hidden',
           border: '1px solid var(--border)',

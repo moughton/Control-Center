@@ -4,7 +4,9 @@ import type { GolfHole, GolfRound, GolfShot } from './types'
 import { formatDateShort } from './lib/dates'
 import GolfShotMap from './components/GolfShotMap'
 
-type GolfTab = 'rounds' | 'scorecard' | 'insights'
+import GreenContourViewer from './components/GreenContourViewer'
+
+type GolfTab = 'rounds' | 'scorecard' | 'caddy' | 'contours' | 'insights'
 
 const CLUBS = ['Driver', '3 Wood', '5 Wood', '4 Iron', '5 Iron', '6 Iron', '7 Iron', '8 Iron', '9 Iron', 'PW', 'GW', 'SW', 'LW', 'Putter']
 const INTENDED_SHAPES = ['straight', 'draw', 'fade', 'punch']
@@ -205,27 +207,41 @@ export default function Golf() {
       {error && <div className="error-banner">{error}</div>}
 
       {/* Sub-Tabs */}
-      <div className="filter-chips" style={{ marginBottom: '16px' }}>
+      <div className="filter-chips" style={{ marginBottom: '16px', flexWrap: 'wrap' }}>
         <button
           type="button"
           className={`filter-chip ${activeTab === 'rounds' ? 'active' : ''}`}
           onClick={() => setActiveTab('rounds')}
         >
-          🏆 Rounds & Shot Maps
+          🏆 Rounds
         </button>
         <button
           type="button"
           className={`filter-chip ${activeTab === 'scorecard' ? 'active' : ''}`}
           onClick={() => setActiveTab('scorecard')}
         >
-          ⛳ Live On-Course Scorecard
+          ⛳ Live Scorecard
+        </button>
+        <button
+          type="button"
+          className={`filter-chip ${activeTab === 'caddy' ? 'active' : ''}`}
+          onClick={() => setActiveTab('caddy')}
+        >
+          🧠 AI Caddy Insights
+        </button>
+        <button
+          type="button"
+          className={`filter-chip ${activeTab === 'contours' ? 'active' : ''}`}
+          onClick={() => setActiveTab('contours')}
+        >
+          📐 Green Contours
         </button>
         <button
           type="button"
           className={`filter-chip ${activeTab === 'insights' ? 'active' : ''}`}
           onClick={() => setActiveTab('insights')}
         >
-          📈 Performance Matrix
+          📈 Matrix
         </button>
       </div>
 
@@ -599,7 +615,82 @@ export default function Golf() {
             </div>
           )}
 
-          {/* TAB 3: PERFORMANCE MATRIX & INSIGHTS */}
+          {/* TAB: AI CADDY MODE */}
+          {activeTab === 'caddy' && (
+            <div className="golf-caddy-view">
+              <section className="analytics-section">
+                <h2>🧠 On-Course AI Caddy Strategy</h2>
+                <p className="subtitle">
+                  Real-time recommendations based on your historical miss tendencies, 3-hole Nassau match status, and club distances at Richmond Country Club.
+                </p>
+
+                <div className="gtg-stats-card" style={{ marginBottom: '16px', borderLeft: '4px solid var(--accent)' }}>
+                  <div className="gtg-card-header">
+                    <span className="task-name" style={{ fontSize: '16px' }}>
+                      Target Strategy for Hole #{activeViewHole} (Par {currentHolePar})
+                    </span>
+                    <span className="streak-badge">Richmond CC</span>
+                  </div>
+
+                  <div style={{ marginTop: '12px', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div>
+                      <strong>🎯 Recommended Target:</strong> Aim left-center fairway with a gentle draw.
+                    </div>
+                    <div>
+                      <strong>⚠️ Historical Miss Tendency:</strong> Drives tend to push right when aiming right-center. Keep tee shot on the left fairway ridge.
+                    </div>
+                    <div>
+                      <strong>📊 Nassau Chunk Status (Chunk {Math.floor((activeViewHole - 1) / 3) + 1}):</strong>{' '}
+                      Currently <strong>1-UP</strong> in this 3-hole segment. Playing for even par on this hole locks in the chunk win!
+                    </div>
+                  </div>
+                </div>
+
+                <div className="analytics-kpi-grid">
+                  <div className="analytics-kpi-card">
+                    <span className="kpi-label">Driver Carry Avg</span>
+                    <span className="kpi-value">285 yds</span>
+                    <span className="kpi-sub">Target Line: Left-Center</span>
+                  </div>
+                  <div className="analytics-kpi-card">
+                    <span className="kpi-label">Approach Accuracy</span>
+                    <span className="kpi-value">72% GIR</span>
+                    <span className="kpi-sub">100-150yd Range</span>
+                  </div>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {/* TAB: GREEN CONTOURS */}
+          {activeTab === 'contours' && (
+            <div className="golf-contours-view">
+              <section className="analytics-section">
+                <h2>Richmond Country Club — Green Topography</h2>
+                <p className="subtitle">Slope gradients, tier breaks, and pin proximity targets for each green.</p>
+
+                {/* Hole Selector Stepper */}
+                <div className="gtg-card-header" style={{ marginBottom: '12px' }}>
+                  <h3>Select Hole: #{activeViewHole}</h3>
+                  <div className="quick-reps">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18].map((h) => (
+                      <button
+                        key={h}
+                        type="button"
+                        className={`quick-rep-button ${activeViewHole === h ? 'active' : ''}`}
+                        onClick={() => setActiveViewHole(h)}
+                        style={{ padding: '4px 8px', fontSize: '11px' }}
+                      >
+                        H{h}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <GreenContourViewer holeNumber={activeViewHole} par={currentHolePar} courseName="Richmond Country Club" />
+              </section>
+            </div>
+          )}
           {activeTab === 'insights' && (
             <div className="golf-insights-view">
               <section className="analytics-section">
