@@ -28,18 +28,30 @@ def sync_garmin_golf(client):
     try:
         print("Fetching Garmin Golf activities & rounds...")
         activities = client.get_activities(0, 100)
-        golf_activities = [a for a in activities if a.get("activityType", {}).get("typeKey") == "golf"]
+        print(f"Total Garmin activities fetched: {len(activities)}")
+
+        golf_activities = []
+        for a in activities:
+            type_key = str(a.get("activityType", {}).get("typeKey", "")).lower()
+            name = str(a.get("activityName", "")).lower()
+            parent_id = a.get("activityType", {}).get("parentTypeId")
+
+            if "golf" in type_key or "golf" in name or parent_id == 5:
+                golf_activities.append(a)
 
         print(f"Found {len(golf_activities)} Garmin Golf activities.")
 
         for g in golf_activities:
-            course = g.get("activityName", "Garmin Golf Round")
+            act_id = g.get("activityId")
+            course = g.get("activityName", "Richmond Country Club")
             start_iso = g.get("startTimeGMT", datetime.now().isoformat())
             duration = int(g.get("duration", 14400))
             cal = int(g.get("calories", 900))
             dist = g.get("distance")
 
-            # Upsert into garmin_activities with full raw_payload (Postgres JSONB / Snowflake VARIANT equivalent)
+            print(f"Processing Golf Activity ID: {act_id} - Course: {course}")
+
+            # Upsert into garmin_activities
             act_payload = {
                 "activity_type": "golf",
                 "activity_name": course,
@@ -50,7 +62,8 @@ def sync_garmin_golf(client):
                 "notes": "Garmin Golf Watch Log",
                 "raw_payload": g,
             }
-            requests.post(f"{SUPABASE_URL}/rest/v1/garmin_activities", headers=get_supabase_headers(), json=act_payload)
+            res_act = requests.post(f"{SUPABASE_URL}/rest/v1/garmin_activities", headers=get_supabase_headers(), json=act_payload)
+            print(f"garmin_activities upsert status: {res_act.status_code}")
 
             # Upsert into golf_rounds
             round_payload = {
@@ -64,7 +77,16 @@ def sync_garmin_golf(client):
                 "notes": "Synced from Garmin Golf Watch",
                 "raw_payload": g,
             }
-            requests.post(f"{SUPABASE_URL}/rest/v1/golf_rounds", headers=get_supabase_headers(), json=round_payload)
+            res_round = requests.post(f"{SUPABASE_URL}/rest/v1/golf_rounds", headers=get_supabase_headers(), json=round_payload)
+            print(f"golf_rounds upsert status: {res_round.status_code}")
+
+            # Fetch detailed activity GPS points if available
+            try:
+                details = client.get_activity_details(act_id)
+                geo = client.get_activity_geo_data(act_id)
+                print(f"Fetched extra geo data for round {act_id}: {bool(geo)}")
+            except Exception as geo_err:
+                print(f"Geo details notice: {geo_err}")
 
     except Exception as e:
         print(f"Error syncing Garmin Golf rounds: {e}")
@@ -79,6 +101,7 @@ def sync_garmin_data():
         print(f"Logging into Garmin Connect as {GARMIN_EMAIL}...")
         client = Garmin(GARMIN_EMAIL, GARMIN_PASSWORD)
         client.login()
+        print("Successfully logged into Garmin Connect!")
 
         today = datetime.now().date()
         yesterday = today - timedelta(days=1)
@@ -87,16 +110,19 @@ def sync_garmin_data():
             date_str = dt.isoformat()
             print(f"Fetching Garmin stats for {date_str}...")
 
-            stats = client.get_user_summary(date_str) or {}
-            heart_rate = client.get_rhr_day(date_str) or {}
-            sleep_data = client.get_sleep_data(date_str) or {}
+            try:
+                stats = client.get_user_summary(date_str) or {}
+                heart_rate = client.get_rhr_day(date_str) or {}
+                sleep_data = client.get_sleep_data(date_str) or {}
+            except Exception as f_err:
+                print(f"Error fetching daily metrics for {date_str}: {f_err}")
+                stats, heart_rate, sleep_data = {}, {}, {}
 
             steps = stats.get("totalSteps")
             rhr = heart_rate.get("restingHeartRate") if heart_rate else None
             active_cal = stats.get("activeKilocalories")
             sleep_sec = sleep_data.get("dailySleepDTO", {}).get("sleepTimeSeconds") if sleep_data else None
 
-            # Store full raw payload for schema drift flexibility (JSONB / VARIANT)
             payload = {
                 "logged_at": date_str,
                 "steps": steps,
