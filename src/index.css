@@ -43,6 +43,39 @@
   }
 }
 
+/* Manual theme toggle — wins over the system preference above in both directions. */
+:root[data-theme='light'] {
+  --text: #3a3640;
+  --text-h: #08060d;
+  --text-muted: #8a8591;
+  --bg: #fafafa;
+  --card-bg: #fff;
+  --border: #e5e4e7;
+  --accent: #7c3aed;
+  --accent-bg: rgba(124, 58, 237, 0.1);
+  --overdue: #dc2626;
+  --overdue-bg: rgba(220, 38, 38, 0.08);
+  --today: #d97706;
+  --today-bg: rgba(217, 119, 6, 0.08);
+  --upcoming: #16a34a;
+}
+
+:root[data-theme='dark'] {
+  --text: #d1cfd6;
+  --text-h: #f3f4f6;
+  --text-muted: #8b8794;
+  --bg: #121215;
+  --card-bg: #1c1c21;
+  --border: #2e303a;
+  --accent: #a78bfa;
+  --accent-bg: rgba(167, 139, 250, 0.15);
+  --overdue: #f87171;
+  --overdue-bg: rgba(248, 113, 113, 0.12);
+  --today: #fbbf24;
+  --today-bg: rgba(251, 191, 36, 0.12);
+  --upcoming: #4ade80;
+}
+
 * {
   box-sizing: border-box;
 }
