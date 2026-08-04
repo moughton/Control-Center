@@ -29,27 +29,27 @@ Each facet is a self-contained top-level component (`RecurringTasks.tsx`, `Gtg.t
 - **Analytics** (`Analytics.tsx`) — consolidated multi-facet dashboard with time-window filtering (`7d`, `30d`, `ytd`, `all`), GTG volume breakdowns, category task completion stats, active streaks, and a unified activity feed.
 - **Health & Wearables** (`Health.tsx`) — unified health recovery facet containing internal sub-tab navigation (`Overview`, `Garmin`, `Eight Sleep`, `Renpho Scale`).
 - **Golf Performance & Live Scorecard** (`Golf.tsx`) — dedicated golf facet featuring:
-  - 🏆 **Rounds & Interactive Satellite Shot Maps** ([`src/components/GolfShotMap.tsx`](file:///C:/_git/Control-Center/src/components/GolfShotMap.tsx)): Interactive Leaflet + Esri World Imagery Satellite tiles. Automatically calculates `fitBounds()` so 100% of shots on the hole are visible.
+  - 🏆 **Rounds & Interactive Satellite Shot Maps** ([`src/components/GolfShotMap.tsx`](file:///C:/_git/Control-Center/src/components/GolfShotMap.tsx)): Interactive Leaflet + Esri World Imagery Satellite tiles. Vertical rectangle layout. **Strictly renders ONLY raw GPS telemetry** from source payload (zero synthetic/fabricated GPS).
   - 🎯 **Clickable Shot List**: Clicking any shot in the log below the map focuses, zooms, and opens an info popup for that exact shot's GPS location.
-  - ⛳ **Live On-Course Scorecard**: 1-tap fast score logging, hole-by-hole par/score/putts, Fairway/GIR results, intended vs actual shot shape, strike impact location, and **📍 GPS Shot Location Tagging**.
-  - 📈 **3-Hole Match Play Engine (Nassau Chunks)**: Evaluates 3-hole blocks (Under par = Win 🟢, Even = Tie 🟡, Over par = Loss 🔴) with match record tracking (e.g. `5W - 0L - 1T`).
+  - ⛳ **Richmond CC Live Scorecard**: Official Richmond CC Par **72** (Out: 36, In: 36). Scorecard renders Front 9 (Out), Back 9 (In), and Total 18-Hole KPI summary cards (`75 (+3)`).
+  - 🧠 **On-Course AI Caddy Mode**: Target line strategy, miss tendency alerts (e.g. right push warnings), and 3-Hole Nassau chunk match recommendations.
+  - 📐 **Richmond CC Green Topography Book** ([`src/components/GreenContourViewer.tsx`](file:///C:/_git/Control-Center/src/components/GreenContourViewer.tsx)): High-resolution StrackaLine green slope maps for Holes 1-18 extracted from official green book PDF (whitespace margins & bottom table cropped out). Includes green depths (`H1 = 27.0y`, `H5 = 37.2y`, `H11 = 38.2y`, etc.).
+  - 📈 **3-Hole Match Play Engine (Nassau Chunks)**: Evaluates 3-hole blocks (Under par = Win 🟢, Even = Tie 🟡, Over par = Loss 🔴) with match record tracking (e.g. `5W - 1L - 0T`).
 
-Candidate future facets discussed: meal logging (macros, prep instructions, time-of-day), hypertrophy training log, kettlebell training log, a lightweight read-only Supabase table browser.
+## Database Tables & Schema Drift (VARIANT / JSONB)
 
-## Database Tables & Seed
-
-- `golf_rounds` (`id` uuid primary key, `course_name`, `played_at`, `total_score`, `total_par`, `score_to_par`, `fairways_hit`, `gir_count`, `total_putts`, `longest_drive_yds`, `segment_record`).
+- `golf_rounds` (`id` uuid primary key, `course_name`, `played_at`, `total_score`, `total_par`, `score_to_par`, `fairways_hit`, `gir_count`, `total_putts`, `longest_drive_yds`, `segment_record`, `raw_payload` jsonb).
 - `golf_round_holes` (`id` uuid primary key, `round_id`, `hole_number`, `par`, `score`, `putts`, `fairway_result`, `gir`, `segment_index`).
-- `golf_shots` (`id` uuid primary key, `round_id`, `hole_number`, `shot_number`, `club_used`, `distance_yds`, `intended_shape`, `actual_shape`, `impact_location`, `latitude`, `longitude`).
-- `renpho_scale_logs` (`logged_at` timestamp primary key, `weight_lbs`, `body_fat_pct`, `muscle_mass_lbs`, `water_pct`, `bmi`, `visceral_fat`, `bone_mass_lbs`).
-- `garmin_activities` (`id` uuid primary key, `activity_type`, `activity_name`, `start_time`, `duration_seconds`, `calories`, `avg_hr`, `max_hr`, `distance_meters`, `notes`).
-- `eight_sleep_logs` (`sleep_date` date unique, `sleep_score`, `light_sleep_seconds`, `deep_sleep_seconds`, `rem_sleep_seconds`, `awake_seconds`, `toss_and_turns`, `avg_respiratory_rate`).
-- `health_daily_metrics` (`logged_at` date primary key, `steps`, `resting_hr`, `sleep_seconds`, `sleep_score`, `active_calories`, `hrv_avg`).
+- `golf_shots` (`id` uuid primary key, `round_id`, `hole_number`, `shot_number`, `club_used`, `distance_yds`, `intended_shape`, `actual_shape`, `impact_location`, `latitude`, `longitude`, `raw_payload` jsonb).
+- `renpho_scale_logs` (`logged_at` timestamp primary key, `weight_lbs`, `body_fat_pct`, `muscle_mass_lbs`, `water_pct`, `bmi`, `visceral_fat`, `bone_mass_lbs`, `raw_payload` jsonb).
+- `garmin_activities` (`id` uuid primary key, `activity_type`, `activity_name`, `start_time`, `duration_seconds`, `calories`, `avg_hr`, `max_hr`, `distance_meters`, `notes`, `raw_payload` jsonb).
+- `eight_sleep_logs` (`sleep_date` date unique, `sleep_score`, `light_sleep_seconds`, `deep_sleep_seconds`, `rem_sleep_seconds`, `awake_seconds`, `toss_and_turns`, `avg_respiratory_rate`, `raw_payload` jsonb).
+- `health_daily_metrics` (`logged_at` date primary key, `steps`, `resting_hr`, `sleep_seconds`, `sleep_score`, `active_calories`, `hrv_avg`, `raw_payload` jsonb).
 
 ## Automated Ingestion Pipeline (Option B)
 
-- **Python Sync Script**: `scripts/sync_health_data.py` uses `garminconnect` and Supabase REST API.
-- **GitHub Actions Workflow**: `.github/workflows/health_sync.yml` runs a daily automated cron job at 06:00 UTC. Requires repository secrets `GARMIN_EMAIL` and `GARMIN_PASSWORD`.
+- **Python Sync Script**: `scripts/sync_health_data.py` uses `garminconnect` and Supabase REST API (populating `raw_payload` JSONB columns for schema drift resilience).
+- **GitHub Actions Workflow**: `.github/workflows/health_sync.yml` runs daily at 06:00 UTC (Node 22 / Python 3.12). Requires repository secrets `GARMIN_EMAIL` and `GARMIN_PASSWORD`.
 
 ## Conventions established in this codebase
 
@@ -61,6 +61,7 @@ Candidate future facets discussed: meal logging (macros, prep instructions, time
 - **Mandatory categories & targets**: `recurring_tasks.category_id` is `NOT NULL`. `gtg_exercises.daily_target` is `NOT NULL` (min 1).
 - **Imperial Units**: Weight & body composition in **lbs** (pounds) across Renpho scale facet and types.
 - **Colors & Theme**: `src/lib/colors.ts` fixed 12-swatch palette. `src/lib/theme.ts` + `data-theme` attribute on `<html>` for Auto/Light/Dark mode.
+- **Zero Fabrication Rule**: NEVER synthesize or estimate GPS coordinates or mock round data. Only render raw source payload data.
 
 ## Testing practice
 
