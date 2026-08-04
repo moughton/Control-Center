@@ -482,6 +482,14 @@ export default function Golf() {
                     </div>
                   </div>
 
+                  {/* Embedded Live Green Slope & Tap-to-Place Pin Location Map */}
+                  <GreenContourViewer
+                    holeNumber={activeHoleNum}
+                    par={holePar}
+                    courseName={courseNameInput}
+                    onPinPlaced={(pinLabel) => console.log(`Pin placed at ${pinLabel}`)}
+                  />
+
                   {/* Par & Score Buttons */}
                   <div className="interval-label">
                     <span>Par:</span>
