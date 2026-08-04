@@ -31,6 +31,8 @@ export default function GolfShotMap({
     .filter((s) => s.hole_number === holeNumber)
     .sort((a, b) => a.shot_number - b.shot_number)
 
+  const validShotsWithGps = holeShots.filter((s) => s.latitude && s.longitude)
+
   // Load Leaflet CSS & JS if not loaded
   useEffect(() => {
     if (window.L) {
@@ -49,11 +51,13 @@ export default function GolfShotMap({
     document.body.appendChild(script)
   }, [])
 
-  // Initialize Map & Render Markers + Polylines
+  // Initialize Map & Render Markers + Polylines ONLY from source payload GPS
   useEffect(() => {
     if (!leafletLoaded || !mapContainerRef.current) return
     const L = window.L
     if (!L) return
+
+    if (validShotsWithGps.length === 0) return
 
     if (!mapInstanceRef.current) {
       // Esri World Imagery Satellite Tiles
@@ -65,8 +69,11 @@ export default function GolfShotMap({
         }
       )
 
+      const firstLat = Number(validShotsWithGps[0].latitude)
+      const firstLng = Number(validShotsWithGps[0].longitude)
+
       const map = L.map(mapContainerRef.current, {
-        center: [49.1360, -123.1172],
+        center: [firstLat, firstLng],
         zoom: 17,
         layers: [satelliteTiles],
         zoomControl: true,
@@ -82,13 +89,6 @@ export default function GolfShotMap({
     markersRef.current.clear()
 
     if (map._polylineLayer) map.removeLayer(map._polylineLayer)
-
-    const validShotsWithGps = holeShots.filter((s) => s.latitude && s.longitude)
-
-    if (validShotsWithGps.length === 0) {
-      map.setView([49.1341, -123.1168], 17)
-      return
-    }
 
     const latLngs: [number, number][] = []
 
@@ -154,7 +154,7 @@ export default function GolfShotMap({
     // AUTO FIT-BOUNDS: Covers 100% of shots on this hole simultaneously!
     const bounds = L.latLngBounds(latLngs)
     map.fitBounds(bounds, { padding: [40, 40], maxZoom: 18 })
-  }, [leafletLoaded, holeShots, selectedShotId])
+  }, [leafletLoaded, holeShots, selectedShotId, validShotsWithGps])
 
   // Center & open popup when a shot is selected from the list below
   useEffect(() => {
@@ -167,13 +167,34 @@ export default function GolfShotMap({
     }
   }, [selectedShotId, holeShots])
 
+  if (validShotsWithGps.length === 0) {
+    return (
+      <div
+        className="shot-map-wrapper"
+        style={{
+          marginTop: '12px',
+          padding: '24px',
+          background: 'var(--card-bg)',
+          borderRadius: '12px',
+          border: '1px solid var(--border)',
+          textAlign: 'center',
+          color: 'var(--text-muted)',
+        }}
+      >
+        <p style={{ margin: 0, fontWeight: 'bold' }}>📡 No Raw GPS Telemetry Available for Hole #{holeNumber}</p>
+        <p style={{ margin: '6px 0 0 0', fontSize: '12px' }}>
+          Raw Garmin Connect payload has not provided GPS coordinates for this hole. No synthetic data will be rendered.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="shot-map-wrapper" style={{ marginTop: '12px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
         <h4 style={{ margin: 0 }}>
-          ⛳ Hole #{holeNumber} Satellite Shot Map (Par {par}) — {holeShots.length} Shots
+          ⛳ Hole #{holeNumber} Satellite Shot Map (Par {par}) — {validShotsWithGps.length} Source GPS Shots
         </h4>
-        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Auto-Fit Bounds (100% Shots)</span>
       </div>
 
       <div
