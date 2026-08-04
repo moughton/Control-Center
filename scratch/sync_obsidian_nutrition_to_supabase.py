@@ -4,20 +4,45 @@ import json
 import hashlib
 
 foods_dir = r"C:\_git\robo-documents\🎛️ Control Center\Supabase Data\Foods"
-recipes_dir = r"C:\_git\robo-documents\🎛️ Control Center\Supabase Data\Recipes"
 
 def calculate_md5(content):
   return hashlib.md5(content.encode("utf-8")).hexdigest()
 
-def parse_food_file(content):
+def parse_food_file(content, filename):
   """
-  Parses a Food markdown file, extracting data from:
-  1. 2-Column Vertical Table (| Attribute | Value |)
-  2. Food Synergies Table (| Paired With | Synergy | Mechanism |)
-  3. Sections (Dosage Guidance, Good Energy Relevance)
+  Parses a Food markdown file comprehensively, extracting:
+  - 2-Column Vertical Table OR YAML Frontmatter
+  - Portion State (Cooked vs Raw vs Dry)
+  - Quotes ([!quote])
+  - Overview / Sports Nutrition Snapshot ([!success])
+  - Quick Reference Portion Conversions
+  - Food Synergies Table
+  - Dosage & Timing Guidance (with timing notes)
+  - Meal Ideas & Pairings
+  - Full Micronutrient Details (Vitamins, Minerals, Amino Acids, Polyphenols)
   """
   data = {}
   data["content_hash"] = calculate_md5(content)
+
+  # Portion State (Cooked vs Raw)
+  if "cooked" in content.lower():
+    data["portion_state"] = "cooked"
+  elif "raw" in content.lower() or "dry" in content.lower():
+    data["portion_state"] = "raw_dry"
+  else:
+    data["portion_state"] = "unspecified"
+
+  # Quotes ([!quote] or blockquote)
+  quotes = re.findall(r"^>\s+\[!quote\]\s*\n>\s+\"(.*)\"", content, re.MULTILINE)
+  if not quotes:
+    quotes = re.findall(r"\"([^\"]{20,})\"", content)
+  if quotes:
+    data["quotes"] = [q.strip() for q in quotes if len(q) > 15][:3]
+
+  # Overview Snapshot ([!success] callout)
+  snapshot = re.search(r"^>\s+\[!success\]\s*(.*?)(?=\n---|^\n|\Z)", content, re.DOTALL | re.MULTILINE)
+  if snapshot:
+    data["sports_nutrition_snapshot"] = snapshot.group(1).replace(">", "").strip()
 
   # 1. Parse 2-Column Vertical Table (| Attribute | Value |)
   table_rows = re.findall(r"^\|([^|]+)\|([^|]+)\|\s*$", content, re.MULTILINE)
@@ -25,10 +50,10 @@ def parse_food_file(content):
     attr = row[0].strip()
     val = row[1].strip()
 
-    if attr.lower() in ["attribute", "---", "variety", "paired with"]:
+    if attr.lower() in ["attribute", "---", "variety", "paired with", "amount", "mineral", "vitamin", "amino acid", "paired with"]:
       continue
 
-    clean_key = attr.lower().replace(" ", "_").replace("(", "").replace(")", "").replace("+", "")
+    clean_key = attr.lower().replace(" ", "_").replace("(", "").replace(")", "").replace("+", "").replace("/", "_")
     
     clean_val = val
     if val.lower() in ["yes", "true"]: clean_val = True
@@ -45,26 +70,68 @@ def parse_food_file(content):
 
     data[clean_key] = clean_val
 
-  # 2. Parse Food Synergies Table
+  # 2. Parse YAML Frontmatter if present
+  fm_match = re.search(r"^---\s*\n(.*?)\n---", content, re.DOTALL)
+  if fm_match:
+    yaml_text = fm_match.group(1)
+    for line in yaml_text.split("\n"):
+      line = line.strip()
+      if not line or line.startswith("#"): continue
+      if ":" in line:
+        k, v = line.split(":", 1)
+        k = k.strip().lower().replace(" ", "_")
+        v = v.strip().strip('"\'')
+        if v.lower() == "true": v = True
+        elif v.lower() == "false": v = False
+        elif v == "": v = 0
+        else:
+          try:
+            if "." in v: v = float(v)
+            else: v = int(v)
+          except ValueError: pass
+        if k not in data:
+          data[k] = v
+
+  # 3. Parse Quick Reference Portion Conversions Table
+  quick_ref_match = re.search(r"### Quick Reference.*?\n(\|.*?)(?=\n\n|\n#|\Z)", content, re.DOTALL)
+  if quick_ref_match:
+    q_rows = re.findall(r"^\|([^|]+)\|([^|]+)\|([^|]+)\|([^|]+)\|(?:([^|]+)\|)?", quick_ref_match.group(1), re.MULTILINE)
+    portion_list = []
+    for r in q_rows:
+      amt = r[0].strip()
+      if amt.lower() in ["amount", "---", "amount (cooked)", "amount (raw)"]: continue
+      portion_list.append({
+        "portion": amt,
+        "calories": r[1].strip(),
+        "protein": r[2].strip(),
+        "fat": r[3].strip()
+      })
+    if portion_list:
+      data["quick_reference_servings"] = portion_list
+
+  # 4. Parse Food Synergies Table
   synergies = []
   synergy_rows = re.findall(r"^\|([^|]+)\|([^|]+)\|([^|]+)\|\s*$", content, re.MULTILINE)
   for s_row in synergy_rows:
     paired = s_row[0].strip().replace("[[", "").replace("]]", "")
     synergy = s_row[1].strip()
     mechanism = s_row[2].strip()
-    if paired.lower() in ["paired with", "---", "amount (cooked)"]:
-      continue
+    if paired.lower() in ["paired with", "---", "amount (cooked)", "amount (raw)", "mineral", "vitamin", "amino acid", "variety"]: continue
     synergies.append({"paired_with": paired, "synergy": synergy, "mechanism": mechanism})
-
   if synergies:
     data["food_synergies"] = synergies
 
-  # 3. Parse Dosage Guidance Section
+  # 5. Parse Dosage & Timing Guidance Section
   dosage_match = re.search(r"## Dosage Guidance\s*\n(.*?)(?=\n##|\Z)", content, re.DOTALL)
   if dosage_match:
-    data["dosage_guidance"] = dosage_match.group(1).strip()
+    data["dosage_and_timing_guidance"] = dosage_match.group(1).strip()
 
-  # 4. Parse Good Energy Relevance Section
+  # 6. Parse Meal Ideas Section
+  meal_ideas_match = re.search(r"## Meal Ideas\s*\n(.*?)(?=\n##|\Z)", content, re.DOTALL)
+  if meal_ideas_match:
+    data["meal_ideas"] = meal_ideas_match.group(1).strip()
+
+  # 7. Parse Good Energy Relevance Section
   ge_match = re.search(r"## Good Energy Relevance\s*\n(.*?)(?=\n##|\Z)", content, re.DOTALL)
   if ge_match:
     data["good_energy_relevance"] = ge_match.group(1).strip()
@@ -73,7 +140,7 @@ def parse_food_file(content):
 
 def generate_ddl_and_seed():
   sql_lines = [
-    "-- Create Food Library table",
+    "-- Create Food Library table with rich JSONB schema",
     "create table if not exists food_library (",
     "  id uuid primary key default gen_random_uuid(),",
     "  name text not null unique,",
@@ -90,14 +157,13 @@ def generate_ddl_and_seed():
     "",
   ]
 
-  # Seed Foods
   food_files = [f for f in os.listdir(foods_dir) if f.endswith(".md")]
   print(f"Parsing {len(food_files)} Food files...")
   for ff in food_files:
     path = os.path.join(foods_dir, ff)
     with open(path, "r", encoding="utf-8") as f:
       content = f.read()
-    fm = parse_food_file(content)
+    fm = parse_food_file(content, ff)
     name = ff.replace(".md", "").replace("'", "''")
     cat = str(fm.get("food_category", "general")).replace("'", "''")
     cal = fm.get("calories_per_100g", fm.get("calories", 0)) or 0
